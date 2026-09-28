@@ -14,30 +14,31 @@
 **A high-performance, production-grade miner engineered from the ground up for Decred's DCP-0011 BLAKE3 consensus upgrade.**  
 Supports parallel CPU SIMD acceleration (AVX-512, AVX2) and multi-vendor GPU execution (NVIDIA CUDA, AMD/Intel OpenCL).
 
-[Features](#-key-features) • [Hashrates](#-benchmark-performance) • [Quickstart](#-quickstart--installation) • [Mining Guide](#-mining-operations) • [CLI Options](#-command-line-reference) • [Dev Fee](#-developer-fee-01)
+[🚀 Quick Start (No Dev Tools Needed)](#-quick-start-for-miners-no-dev-tools-required) • [Hashrates](#-benchmark-performance) • [Features](#-key-features) • [Build from Source](#-building-from-source) • [Mining Guide](#-mining-operations) • [CLI Reference](#-command-line-reference) • [คู่มือภาษาไทย](#-คู่มือเริ่มต้นใช้งานฉบับภาษาไทย)
 
 </div>
 
 ---
 
-## 🌟 Key Features
+## 🚀 Quick Start for Miners (No Dev Tools Required!)
 
-- **Consensus-Specific DCP-0011 Engine**:
-  Decred's 180-byte header spans 3 BLAKE3 compression blocks. `dcrminer` precomputes the midstate chaining value ($CV_2$) after blocks 0 and 1 on the host, executing **only the final 52-byte block** inside the inner nonce search loop.
-- **Zero-Word Arithmetic Elimination**:
-  In Decred's final block layout, message words $m[13], m[14], m[15]$ are strictly zero padding. All additions and quarter-round mixing steps involving these words are omitted at compile time for maximum throughput.
-- **Dynamic Multi-CPU Vector Dispatch**:
-  - **AVX-512 (16 Lanes Parallel)**: Uses native `_mm512_ror_epi32` instructions with zero register spill.
-  - **AVX2 (8 Lanes Parallel)**: Utilizes `_mm256_shuffle_epi8` for instantaneous 8-bit and 16-bit word rotations.
-  - **Scalar Fallback**: Clean baseline implementation guaranteeing safe execution on older x86_64 machines.
-  - **Dynamic CPUID Detection**: Detects CPU instruction sets at runtime; will **never crash** with `Illegal Instruction` on non-AVX processors.
-- **Multi-Vendor GPU Acceleration**:
-  - **NVIDIA CUDA**: Fully unrolled 7-round compression kernel kept 100% in hardware registers. Constant memory caching for block headers and fast `__byte_perm` rotations. Multi-architecture binary targets Maxwell (SM 5.0) through Blackwell (SM 10.0+).
-  - **AMD & Intel OpenCL**: Cross-platform compute kernels with dynamic workgroup sizing to prevent `CL_INVALID_WORK_GROUP_SIZE (-54)` errors on integrated and discrete GPUs.
-- **Lock-Free Asynchronous Orchestration**:
-  High-throughput atomic nonce partitioning and zero-allocation mining loops ensure CPU and GPU workers run at full throttle without lock contention.
-- **Industrial Networking**:
-  Robust Stratum JSON-RPC client and dcrd JSON-RPC `getwork` solo client with exponential backoff reconnects and automatic pool failover.
+> [!TIP]
+> **You do NOT need to install Visual Studio, C++, CMake, or compile anything!**  
+> We provide pre-compiled, zero-dependency standalone binaries for Windows 10/11.
+
+### 📥 1-Click Download:
+1. Go to the **[Latest GitHub Releases](https://github.com/i68i68/dcrminer/releases)**.
+2. Download **`dcrminer-v0.1.0-windows-x64.zip`**.
+3. Extract the ZIP anywhere on your PC (e.g. Desktop).
+
+### ⛏️ Start Mining in 10 Seconds:
+1. Right-click on **`MINE_POOLPY.bat`** and click **Edit** (or open with Notepad).
+2. Change the `WALLET` variable to your own Decred (DCR) address:
+   ```cmd
+   set WALLET=Dsc8zVfG93V2g1iC3tFj1mZ2LqY9bV3KxYx
+   set WORKER=rig1
+   ```
+3. Save and double-click **`MINE_POOLPY.bat`** to start mining!
 
 ---
 
@@ -58,33 +59,67 @@ Empirical benchmarks measured on reference host hardware running genuine 180-byt
 
 ---
 
-## 🚀 Quickstart & Installation
+## 🌟 Key Features
 
-Pre-compiled release binaries are available under [Releases](https://github.com/i68i68/dcrminer/releases).
+- **Consensus-Specific DCP-0011 Engine**:
+  Decred's 180-byte header spans 3 BLAKE3 compression blocks. `dcrminer` precomputes the midstate chaining value ($CV_2$) after blocks 0 and 1 on the host, executing **only the final 52-byte block** inside the inner nonce search loop.
+- **Zero-Word Arithmetic Elimination**:
+  In Decred's final block layout, message words $m[13], m[14], m[15]$ are strictly zero padding. All additions and quarter-round mixing steps involving these words are omitted at compile time for maximum throughput.
+- **Dynamic Multi-CPU Vector Dispatch**:
+  - **AVX-512 (16 Lanes Parallel)**: Uses native `_mm512_ror_epi32` instructions with zero register spill.
+  - **AVX2 (8 Lanes Parallel)**: Utilizes `_mm256_shuffle_epi8` for instantaneous 8-bit and 16-bit word rotations.
+  - **Scalar Fallback**: Clean baseline implementation guaranteeing safe execution on older x86_64 machines.
+  - **Dynamic CPUID Detection**: Detects CPU instruction sets at runtime; will **never crash** with `Illegal Instruction` on non-AVX processors.
+- **Multi-Vendor GPU Acceleration**:
+  - **NVIDIA CUDA**: Fully unrolled 7-round compression kernel kept 100% in hardware registers. Constant memory caching for block headers and fast `__byte_perm` rotations. Multi-architecture binary targets Maxwell (SM 5.0) through Blackwell (SM 10.0+).
+  - **AMD & Intel OpenCL**: Cross-platform compute kernels with dynamic workgroup sizing to prevent `CL_INVALID_WORK_GROUP_SIZE (-54)` errors on integrated and discrete GPUs.
+- **Lock-Free Asynchronous Orchestration**:
+  High-throughput atomic nonce partitioning and zero-allocation mining loops ensure CPU and GPU workers run at full throttle without lock contention.
+- **Zero-Dependency Portable Binary**:
+  Windows binary is compiled with static runtime (`/MT`), requiring zero external Visual C++ DLLs or installers.
 
-### Building from Source
+---
 
-#### 1. Windows (MSVC 2022 + Ninja or Visual Studio)
-Run the 1-click build script:
+## 🛠️ Building from Source (For Developers)
+
+If you wish to compile `dcrminer` from source code on your machine:
+
+### 1. Windows Build (Visual Studio 2022)
+
+#### Prerequisites:
+- Visual Studio 2022 (Community, Build Tools, or Professional) with **Desktop development with C++**
+- CMake (v3.20+)
+- Ninja (Recommended for fastest compilation)
+- *Optional:* NVIDIA CUDA Toolkit (v12.0+) if building with NVIDIA GPU support.
+
+#### Automated Setup via Windows Package Manager (`winget`):
+You can install all required build tools with one command in an Administrator PowerShell:
+```powershell
+winget install Microsoft.VisualStudio.2022.BuildTools Kitware.CMake Ninja-build.Ninja --override "--passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+#### Run the 1-Click Windows Builder:
+Double-click **`build_windows.bat`** or run:
 ```cmd
 build_windows.bat
 ```
-Or build manually from an **x64 Native Tools Command Prompt for VS 2022**:
-```cmd
-cmake -B build_win -G Ninja -DCMAKE_BUILD_TYPE=Release -DDCR_ENABLE_CUDA=ON -DDCR_ENABLE_OPENCL=ON
-ninja -C build_win
-```
+> [!NOTE]
+> `build_windows.bat` automatically locates MSVC, detects CUDA/Ninja, compiles the standalone static executable, and prints diagnostic troubleshooting if any tools are missing. It will never exit silently!
 
-#### 2. Linux (Ubuntu / Debian / Fedora / Arch)
-Install dependencies:
+---
+
+### 2. Linux Build (Ubuntu / Debian / Fedora / Arch)
+
+#### Prerequisites:
 ```bash
 # Ubuntu / Debian
 sudo apt update && sudo apt install -y build-essential cmake ninja-build ocl-icd-opencl-dev
 
-# Optional: NVIDIA CUDA Toolkit (if using NVIDIA GPUs)
+# Optional: NVIDIA CUDA Toolkit (if compiling with CUDA)
 # sudo apt install -y nvidia-cuda-toolkit
 ```
-Run the 1-click build script:
+
+#### Build:
 ```bash
 chmod +x build_linux.sh
 ./build_linux.sh
@@ -95,117 +130,87 @@ chmod +x build_linux.sh
 ## ⛏️ Mining Operations
 
 ### 1. Stratum Pool Mining (Recommended)
-Connect to any standard Decred mining pool:
+Connect to any standard Decred mining pool (such as [PoolPy.lol](https://poolpy.lol)):
 
 ```bash
-# Mine with all CPU cores and all detected GPUs concurrently:
-dcrminer --mode stratum --pool stratum+tcp://dcr.poolpy.lol:5550 --user DsYourWalletAddress.worker1 --pass x --cpu auto --cuda all
+# Mine on PoolPy.lol with auto-detected CPU threads
+dcrminer.exe -o stratum+tcp://stratum.poolpy.lol:5550 -u Dsc8zVfG93V2g1iC3tFj1mZ2LqY9bV3KxYx.rig1 -p x
 
-# Mine with GPU only (0% CPU utilization):
-dcrminer --mode stratum --pool stratum+tcp://dcr.poolpy.lol:5550 --user DsYourWalletAddress.worker1 --pass x --cpu 0 --cuda all
+# Mine with both CPU and all NVIDIA GPUs
+dcrminer.exe -o stratum+tcp://stratum.poolpy.lol:5550 -u Dsc8zVfG93V2g1iC3tFj1mZ2LqY9bV3KxYx.rig1 -p x --cpu auto --cuda all
 
-# Mine with CPU only:
-dcrminer --mode stratum --pool stratum+tcp://dcr.poolpy.lol:5550 --user DsYourWalletAddress.worker1 --pass x --cpu auto --cuda none
+# Mine with specific number of CPU threads (e.g. 16 threads)
+dcrminer.exe -o stratum+tcp://stratum.poolpy.lol:5550 -u Dsc8zVfG93V2g1iC3tFj1mZ2LqY9bV3KxYx.rig1 -p x --cpu 16
 ```
 
-### 2. Automatic Failover Pool
-Ensure 24/7 uptime by specifying a fallback stratum pool:
+### 2. Solo Mining (Direct to local dcrd node)
 ```bash
-dcrminer --mode stratum --pool stratum+tcp://primary-pool.com:5550 --pool-failover stratum+tcp://backup-pool.com:5550 --user DsYourWalletAddress.worker1 --pass x --cpu auto --cuda all
+dcrminer.exe --mode solo --rpc-host 127.0.0.1:9109 --rpc-user your_user --rpc-pass your_pass
 ```
 
-### 3. Solo Mining (Direct dcrd RPC)
-Mine directly against your local or remote Decred full node:
+### 3. Hardware Benchmark
 ```bash
-dcrminer --mode solo --rpc-host 127.0.0.1:9109 --rpc-user your_rpc_user --rpc-pass your_rpc_password --cpu auto --cuda all
-```
+# Fast 10-second benchmark of all available backends
+dcr_benchmark.exe
 
-### 4. Running the Built-in Hardware Benchmark
-Evaluate your system's exact hashrate across all SIMD backends:
-```bash
-# Run 10-second accurate hardware benchmark
-dcr_benchmark --duration 10
+# Or via main miner
+dcrminer.exe --benchmark
 ```
 
 ---
 
-## ⚙️ Command-Line Reference
+## 📋 Command-Line Reference
 
-| Argument | Values / Default | Description |
-| :--- | :--- | :--- |
-| `--list-devices` | - | Probe and display detected CPU extensions and GPU compute devices. |
-| `--mode` | `stratum` \| `solo` | Mining protocol mode (default: `stratum`). |
-| `--pool` | `stratum+tcp://host:port` | Primary Stratum pool URL. |
-| `--pool-failover`| `stratum+tcp://host:port` | Backup Stratum pool URL for seamless failover. |
-| `--user` | `string` | Worker username or wallet address. |
-| `--pass` | `string` | Worker password (default: `x`). |
-| `--cpu` | `auto` \| `N` \| `0` | Number of CPU mining threads (`auto` = all logical cores). |
-| `--cuda` | `all` \| `N` \| `none` | NVIDIA CUDA GPU selector (`all`, device index, or `none`). |
-| `--opencl` | `all` \| `N` \| `none` | OpenCL GPU selector for AMD Radeon & Intel GPUs. |
-| `--rpc-host` | `ip:port` | dcrd RPC server endpoint for solo mining. |
-| `--rpc-user` | `string` | dcrd RPC username. |
-| `--rpc-pass` | `string` | dcrd RPC password. |
-| `--rpc-cert` | `path` | Path to `rpc.cert` for TLS encrypted RPC connections. |
+```
+Usage: dcrminer [OPTIONS]
 
-Credentials can also be provided securely via environment variables:
-- `DCR_POOL_USER`, `DCR_POOL_PASS`
-- `DCR_RPC_USER`, `DCR_RPC_PASS`
+General Options:
+  -h, --help               Display this help guide and exit
+  -v, --version            Display version information
+  --list-devices           Display all detected CPU capabilities, GPUs, and SIMD widths
+  --benchmark              Execute a standalone multi-threaded benchmark
+
+Connection Modes:
+  --mode <solo|stratum>    Mining mode (Default: stratum)
+  -o, --pool <url>         Stratum pool endpoint (e.g., stratum+tcp://stratum.poolpy.lol:5550)
+  -u, --user <wallet>      Mining wallet address and optional .worker suffix
+  -p, --pass <password>    Stratum authorization password (Default: x)
+
+Worker Hardware Controls:
+  --cpu <auto|N|off>       CPU worker allocation (auto = physical cores, N = thread count, off = disable)
+  --cuda <all|N|off>       NVIDIA CUDA devices (all = all GPUs, N = specific device index, off = disable)
+  --opencl <all|N|off>     OpenCL compute devices (AMD/Intel/Apple)
+  --kernel-time <ms>       GPU kernel batch target execution time in ms (Default: 25)
+
+Monitoring:
+  --stats-interval <sec>   Telemetry display frequency in seconds (Default: 5)
+  --log-level <level>      Log level: debug, info, warn, error (Default: info)
+```
 
 ---
 
-## 💡 Developer Fee (0.1%)
+## 🇹🇭 คู่มือเริ่มต้นใช้งานฉบับภาษาไทย
 
-`dcrminer` includes a modest **0.1% developer fee** (3.6 seconds out of every 1-hour mining period) to fund continued maintenance, optimizations, and support for future hardware generations.
+สำหรับผู้ใช้งานชาวไทยที่ต้องการเริ่มต้นขุดเหรียญ Decred (DCR) ผ่านระบบพูล [PoolPy.lol](https://poolpy.lol):
 
-- **10-Minute Warmup Grace Period**: The miner operates 100% on the user's job for the first 10 minutes after launch before any fee cycle occurs.
-- **Fail-Safe Fallback**: If the developer pool is unreachable, encounters a network timeout, or drops connection, the miner **instantly aborts** the fee cycle and resumes 100% mining on the user's pool. Your hardware will never stall or waste cycles.
-- **Strict Cryptographic Isolation**: Fee shares and user shares use immutable job tags to eliminate any risk of share misattribution.
+1. **ดาวน์โหลดโปรแกรม:**
+   - ไปที่หน้า **[Releases](https://github.com/i68i68/dcrminer/releases)**
+   - โหลดไฟล์ `dcrminer-v0.1.0-windows-x64.zip` แล้วแตกไฟล์ออกมา
+2. **ตั้งค่าวอลเล็ท:**
+   - คลิกขวาที่ไฟล์ `MINE_POOLPY.bat` แล้วเลือก **Edit** (หรือเปิดด้วย Notepad)
+   - เปลี่ยน `WALLET=Dsc8z...` เป็นที่อยู่วอลเล็ท Decred ของคุณ แล้วบันทึกไฟล์
+3. **เริ่มขุด:**
+   - ดับเบิ้ลคลิกไฟล์ `MINE_POOLPY.bat` ตัวโปรแกรมจะตรวจจับ CPU/GPU และเริ่มขุดทันที!
 
 ---
 
-## 📁 Repository Layout
+## 📜 Developer Fee (0.1%)
 
-```
-dcrminer/
-├── CMakeLists.txt          # Universal build configuration (C++20, CUDA, OpenCL)
-├── build_windows.bat       # 1-Click Windows MSVC build script
-├── build_linux.sh          # 1-Click Linux build script
-├── README.md               # Project documentation
-├── COMMANDS.md             # Complete CLI reference and command examples
-├── PERFORMANCE.md          # Detailed benchmark report
-├── configs/
-│   └── example.toml        # Sample TOML configuration file
-├── src/
-│   ├── blake3/             # BLAKE3 implementation & CPU SIMD engines
-│   │   ├── cpu_features.hpp        # Runtime CPUID feature detection
-│   │   ├── dcr_blake3_dispatch.hpp # Dynamic SIMD dispatcher
-│   │   ├── dcr_blake3_scalar.hpp   # Clean scalar baseline
-│   │   ├── dcr_blake3_avx2.cpp     # 8-lane AVX2 SIMD kernel
-│   │   └── dcr_blake3_avx512.cpp   # 16-lane AVX-512 SIMD kernel
-│   ├── core/               # Mining coordinator & thread workers
-│   │   ├── devfee.cpp / .hpp       # Transparent fail-safe 0.1% fee manager
-│   │   ├── job.hpp                 # Thread-safe immutable job representation
-│   │   ├── miner.cpp / .hpp        # Device orchestration & work distribution
-│   │   ├── nonce_allocator.hpp     # Collision-free atomic nonce dispenser
-│   │   └── stats.hpp               # Lock-free performance telemetry
-│   ├── decred/             # Consensus & network protocols
-│   │   ├── header.hpp              # 180-byte header serialization
-│   │   ├── pow.hpp                 # BLAKE3 PoW verification
-│   │   ├── rpc_client.cpp / .hpp   # dcrd JSON-RPC client
-│   │   └── stratum_client.cpp/.hpp # Stratum protocol implementation
-│   ├── gpu/                # Hardware GPU accelerators
-│   │   ├── cuda/                   # Native NVIDIA CUDA backend & kernels
-│   │   ├── opencl/                 # Universal OpenCL backend (AMD/Intel)
-│   │   └── hip/                    # AMD HIP source backend
-│   └── main.cpp            # Production CLI application entry point
-└── tools/
-    └── benchmark.cpp       # Standalone hardware benchmarking utility
-```
+`dcrminer` contains a minimal **0.1% developer fee** (1 block out of every 1,000 blocks mined, or ~6 seconds every 100 minutes) to support continued optimization, BLAKE3 consensus enhancements, and maintenance.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
-
-Contributions, bug reports, and pull requests are welcome at [github.com/i68i68/dcrminer](https://github.com/i68i68/dcrminer).
+This software is released under the permissive [MIT License](LICENSE).  
+Copyright (c) 2026 i68i68.
