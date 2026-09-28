@@ -1,0 +1,37 @@
+# Build directories
+build/
+build_win/
+build_linux/
+bin/
+out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Compiler / Linker outputs
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exp
+
+# Ninja files
+.ninja_deps
+.ninja_log
+
+# IDE and Editor configs
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+
+# Miner runtime generated profiles & logs
+profiles/
+*.log

@@ -1,0 +1,31 @@
+[general]
+mode = "solo"  # solo or stratum
+log_level = "info"
+
+[solo]
+rpc_host = "127.0.0.1:9109"
+rpc_user = "user"
+rpc_pass = "pass"
+rpc_cert = "~/.dcrd/rpc.cert"
+
+[stratum]
+pool = "stratum+tcp://pool.example.com:5550"
+user = "DsAddr.worker1"
+pass = "x"
+pool_failover = "stratum+tcp://backup.example.com:5550"
+
+[cpu]
+enabled = true
+threads = "auto"  # auto or number
+
+[cuda]
+enabled = true
+devices = "all"  # all, or comma-separated indices
+block_size = 256
+kernel_time = 25  # target ms per kernel launch
+
+[hip]
+enabled = false
+
+[opencl]
+enabled = false
