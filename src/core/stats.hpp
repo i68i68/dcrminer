@@ -101,7 +101,10 @@ public:
             uint64_t last_h = dev->last_hashes.exchange(current_h, std::memory_order_relaxed);
             double elapsed = std::chrono::duration<double>(now - dev->last_time).count();
             if (elapsed > 0) {
-                double hr = static_cast<double>(current_h - last_h) / elapsed;
+                double hr = (current_h >= last_h)
+                    ? (static_cast<double>(current_h - last_h) / elapsed)
+                    : (static_cast<double>(current_h) / elapsed);
+                if (hr > 50e9) hr = 0.0; // Sanity clamp against impossible single-device spike
                 double current = dev->current_hashrate.load(std::memory_order_relaxed);
                 double smoothed = (current == 0.0) ? hr : (current * 0.4 + hr * 0.6);
                 dev->current_hashrate.store(smoothed, std::memory_order_relaxed);

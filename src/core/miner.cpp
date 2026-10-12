@@ -186,6 +186,8 @@ void Miner::cpu_worker_thread(int thread_id) {
 
         if (sol) {
             sol->device_id = static_cast<uint32_t>(thread_id);
+            sol->extra_nonce2 = job->extra_nonce2;
+            sol->extra_nonce2_hex = job->extra_nonce2_hex;
             if (stats) {
                 stats->accepted.fetch_add(1, std::memory_order_relaxed);
             }
@@ -223,8 +225,35 @@ void Miner::gpu_worker_thread(int device_id, BackendType backend_type, size_t st
             return;
         }
 
-        constexpr uint32_t GPU_BATCH_SIZE = 1048576; // 1M nonces per launch
-        uint64_t last_job_id = 0;
+        if (stats) {
+            std::string dev_name = backend->device_name();
+            if (!dev_name.empty()) stats->name = dev_name;
+        }
+
+        constexpr uint32_t GPU_BATCH_SIZE = 2097152; // 2M nonces per launch (optimal latency vs throughput)
+        std::shared_ptr<MiningJob> active_pool_job = nullptr;
+        uint32_t local_roll_count = 0;
+        uint32_t current_nonce = 0;
+        MiningJob current_gpu_job;
+
+        auto update_card_extranonce2 = [&](const MiningJob& base_job, uint32_t roll_idx) {
+            current_gpu_job = base_job;
+            // Domain tag 0x40 for GPU devices
+            uint32_t en2_val = (static_cast<uint32_t>(0x40 | (device_id & 0x3F)) << 24) | (roll_idx & 0x00FFFFFF);
+            current_gpu_job.extra_nonce2 = en2_val;
+
+            char en2_hex[9];
+            snprintf(en2_hex, sizeof(en2_hex), "%08x", en2_val);
+            current_gpu_job.extra_nonce2_hex = en2_hex;
+
+            current_gpu_job.header_template[148] = static_cast<uint8_t>((en2_val >> 24) & 0xFF);
+            current_gpu_job.header_template[149] = static_cast<uint8_t>((en2_val >> 16) & 0xFF);
+            current_gpu_job.header_template[150] = static_cast<uint8_t>((en2_val >> 8) & 0xFF);
+            current_gpu_job.header_template[151] = static_cast<uint8_t>(en2_val & 0xFF);
+
+            current_gpu_job.block2_words = blake3::prepare_block2_words(current_gpu_job.header_template);
+            backend->set_job(current_gpu_job.midstate, current_gpu_job.block2_words, current_gpu_job.share_target);
+        };
 
         while (m_running.load(std::memory_order_relaxed)) {
             std::shared_ptr<MiningJob> job;
@@ -238,13 +267,24 @@ void Miner::gpu_worker_thread(int device_id, BackendType backend_type, size_t st
                 continue;
             }
 
-            if (job->job_id != last_job_id) {
-                backend->set_job(job->midstate, job->block2_words, job->share_target);
-                last_job_id = job->job_id;
+            if (job != active_pool_job) {
+                active_pool_job = job;
+                local_roll_count = 0;
+                current_nonce = 0;
+                update_card_extranonce2(*job, local_roll_count);
+            } else {
+                // Check if current nonce space is about to be exhausted (4.29 billion nonces)
+                if (static_cast<uint64_t>(current_nonce) + GPU_BATCH_SIZE >= 0xFFFFFF00ULL) {
+                    local_roll_count++;
+                    current_nonce = 0;
+                    update_card_extranonce2(*active_pool_job, local_roll_count);
+                }
             }
 
-            auto range = m_nonce_alloc.allocate(GPU_BATCH_SIZE);
-            uint64_t hashes_done = backend->mine(range.start, range.count);
+            uint32_t start_nonce = current_nonce;
+            current_nonce += GPU_BATCH_SIZE;
+
+            uint64_t hashes_done = backend->mine(start_nonce, GPU_BATCH_SIZE);
             if (stats) {
                 stats->hashes.fetch_add(hashes_done, std::memory_order_relaxed);
             }
@@ -252,9 +292,11 @@ void Miner::gpu_worker_thread(int device_id, BackendType backend_type, size_t st
             auto solutions = backend->get_solutions();
             for (auto& sol : solutions) {
                 sol.device_id = static_cast<uint32_t>(stat_device_idx);
+                sol.extra_nonce2 = current_gpu_job.extra_nonce2;
+                sol.extra_nonce2_hex = current_gpu_job.extra_nonce2_hex;
                 if (stats) stats->accepted.fetch_add(1, std::memory_order_relaxed);
                 if (m_solution_cb) {
-                    m_solution_cb(sol, *job);
+                    m_solution_cb(sol, current_gpu_job);
                 }
             }
         }

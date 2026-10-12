@@ -257,6 +257,13 @@ int main(int argc, char** argv) {
                       << "╚══════════════════════════════════════════════════════════════════════════════════════════╝\n"
                       << dcr::term::RESET << "\n";
             dcr::HeaderBytes solved_header = job.header_template;
+            if (!sol.extra_nonce2_hex.empty()) {
+                uint32_t en2_val = sol.extra_nonce2;
+                solved_header[148] = static_cast<uint8_t>((en2_val >> 24) & 0xFF);
+                solved_header[149] = static_cast<uint8_t>((en2_val >> 16) & 0xFF);
+                solved_header[150] = static_cast<uint8_t>((en2_val >> 8) & 0xFF);
+                solved_header[151] = static_cast<uint8_t>(en2_val & 0xFF);
+            }
             dcr::DcrHeader::set_nonce(solved_header, static_cast<uint32_t>(sol.nonce));
             std::string hex = dcr::hex_encode(solved_header.data(), 180);
             rpc_client->submit_work(hex);
@@ -279,7 +286,9 @@ int main(int argc, char** argv) {
                       << "║  📡 Device:   #" << sol.device_id << "\n"
                       << "╚══════════════════════════════════════════════════════════════════════════════════════════╝\n"
                       << dcr::term::RESET << "\n";
-            stratum_client->submit_work(std::to_string(job.job_id), "", "", std::to_string(sol.nonce));
+            std::string job_id_str = job.stratum_job_id.empty() ? std::to_string(job.job_id) : job.stratum_job_id;
+            std::string en2 = sol.extra_nonce2_hex.empty() ? (job.extra_nonce2_hex.empty() ? "00000000" : job.extra_nonce2_hex) : sol.extra_nonce2_hex;
+            stratum_client->submit_work(job_id_str, en2, "", std::to_string(sol.nonce));
         });
         stratum_client->start();
     }

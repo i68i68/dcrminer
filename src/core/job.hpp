@@ -5,18 +5,22 @@
 #include "../blake3/blake3_ref.hpp"
 #include "../decred/header.hpp"
 #include <atomic>
+#include <string>
 
 namespace dcr {
 
 struct MiningJob {
-    uint64_t job_id;
+    uint64_t job_id = 0;
+    std::string stratum_job_id; // Pool's original job ID string
     ChainValue midstate;        // Precomputed after blocks 0-1
     MsgBlock block2_words;      // Template for block 2 (nonce at word 3)
     Target256 share_target;     // Pool share target
     Target256 network_target;   // Network block target
-    uint32_t height;
-    uint32_t bits;
-    double difficulty;
+    uint32_t height = 0;
+    uint32_t bits = 0;
+    double difficulty = 0.0;
+    uint32_t extra_nonce2 = 0;
+    std::string extra_nonce2_hex = "00000000";
     HeaderBytes header_template; // Full 180-byte template
     std::atomic<bool> stale{false};
     bool is_devfee{false};
@@ -25,6 +29,7 @@ struct MiningJob {
     
     MiningJob(const MiningJob& other) {
         job_id = other.job_id;
+        stratum_job_id = other.stratum_job_id;
         midstate = other.midstate;
         block2_words = other.block2_words;
         share_target = other.share_target;
@@ -32,6 +37,8 @@ struct MiningJob {
         height = other.height;
         bits = other.bits;
         difficulty = other.difficulty;
+        extra_nonce2 = other.extra_nonce2;
+        extra_nonce2_hex = other.extra_nonce2_hex;
         header_template = other.header_template;
         stale.store(other.stale.load());
         is_devfee = other.is_devfee;
@@ -39,6 +46,7 @@ struct MiningJob {
 
     MiningJob& operator=(const MiningJob& other) {
         job_id = other.job_id;
+        stratum_job_id = other.stratum_job_id;
         midstate = other.midstate;
         block2_words = other.block2_words;
         share_target = other.share_target;
@@ -46,6 +54,8 @@ struct MiningJob {
         height = other.height;
         bits = other.bits;
         difficulty = other.difficulty;
+        extra_nonce2 = other.extra_nonce2;
+        extra_nonce2_hex = other.extra_nonce2_hex;
         header_template = other.header_template;
         stale.store(other.stale.load());
         is_devfee = other.is_devfee;

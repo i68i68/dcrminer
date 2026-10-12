@@ -267,6 +267,10 @@ void StratumClient::connection_thread() {
                     if (wsa_err == WSAETIMEDOUT) {
                         continue;
                     }
+#else
+                    if (bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+                        continue;
+                    }
 #endif
                     dcr::term::log_warn("⚠️ [STRATUM]", "Server closed connection or connection timed out.");
                     break;
@@ -301,33 +305,50 @@ void StratumClient::connection_thread() {
     }
 }
 
+static inline bool json_has_key_val(const std::string& msg, const std::string& key, const std::string& val) {
+    if (msg.find("\"" + key + "\":" + val) != std::string::npos) return true;
+    if (msg.find("\"" + key + "\": " + val) != std::string::npos) return true;
+    if (msg.find("\"" + key + "\" :" + val) != std::string::npos) return true;
+    if (msg.find("\"" + key + "\" : " + val) != std::string::npos) return true;
+    return false;
+}
+
+static inline bool json_has_key(const std::string& msg, const std::string& key) {
+    if (msg.find("\"" + key + "\":") != std::string::npos) return true;
+    if (msg.find("\"" + key + "\" :") != std::string::npos) return true;
+    return false;
+}
+
 void StratumClient::process_message(const std::string& msg) {
     // Check for subscribe result (id: 1)
-    if (msg.find("\"id\":1") != std::string::npos && msg.find("\"result\":") != std::string::npos) {
+    if (json_has_key_val(msg, "id", "1") && json_has_key(msg, "result")) {
         size_t res_pos = msg.find("\"result\":");
         if (res_pos != std::string::npos) {
             size_t close_bracket = msg.find("],\"", res_pos);
+            if (close_bracket == std::string::npos) close_bracket = msg.find("], \"", res_pos);
             if (close_bracket != std::string::npos) {
-                size_t q1 = close_bracket + 3;
-                size_t q2 = msg.find('"', q1);
-                if (q2 != std::string::npos) {
-                    m_extranonce1 = msg.substr(q1, q2 - q1);
-                    dcr::term::log_info("🔑 [STRATUM]", "Pool assigned ExtraNonce1: " + m_extranonce1);
+                size_t q1 = msg.find('"', close_bracket + 2);
+                if (q1 != std::string::npos) {
+                    size_t q2 = msg.find('"', q1 + 1);
+                    if (q2 != std::string::npos) {
+                        m_extranonce1 = msg.substr(q1 + 1, q2 - (q1 + 1));
+                        dcr::term::log_info("🔑 [STRATUM]", "Pool assigned ExtraNonce1: " + m_extranonce1);
+                    }
                 }
             }
         }
     }
 
     // Check for authorization result (id: 2)
-    if (msg.find("\"id\":2") != std::string::npos) {
-        if (msg.find("\"result\":true") != std::string::npos) {
+    if (json_has_key_val(msg, "id", "2")) {
+        if (json_has_key_val(msg, "result", "true")) {
             m_authorized.store(true);
             if (m_is_devfee) {
                 dcr::term::log_success("🔐 [DEVFEE]", "DevFee worker connected & authorized (0.1% support pool).");
             } else {
                 dcr::term::log_success("🔐 [STRATUM]", "Worker successfully authorized (" + m_user + ")!");
             }
-        } else if (msg.find("\"error\":") != std::string::npos && msg.find("\"error\":null") == std::string::npos) {
+        } else if (json_has_key(msg, "error") && !json_has_key_val(msg, "error", "null")) {
             m_authorized.store(false);
             if (!m_is_devfee) {
                 dcr::term::log_error("❌ [STRATUM]", "Worker authorization rejected! Response: " + msg);
@@ -336,14 +357,14 @@ void StratumClient::process_message(const std::string& msg) {
     }
 
     // Check for share submission result (id >= 3)
-    if (msg.find("\"id\":") != std::string::npos && msg.find("\"id\":1") == std::string::npos && msg.find("\"id\":2") == std::string::npos) {
-        if (msg.find("\"result\":true") != std::string::npos) {
+    if (json_has_key(msg, "id") && !json_has_key_val(msg, "id", "1") && !json_has_key_val(msg, "id", "2")) {
+        if (json_has_key_val(msg, "result", "true")) {
             if (m_is_devfee) {
                 dcr::term::log_success("✅ [DEVFEE]", "0.1% DevFee share accepted by pool! Thank you for supporting development! 🎉");
             } else {
                 dcr::term::log_success("✅ [STRATUM]", "Share accepted by pool! 🎉");
             }
-        } else if (msg.find("\"error\":") != std::string::npos && msg.find("\"error\":null") == std::string::npos) {
+        } else if (json_has_key(msg, "error") && !json_has_key_val(msg, "error", "null")) {
             if (!m_is_devfee) {
                 dcr::term::log_warn("⚠️ [STRATUM]", "Share rejected by pool: " + msg);
             }
@@ -424,6 +445,8 @@ void StratumClient::handle_mining_notify(const std::string& msg) {
     if (!m_extranonce1.empty()) {
         size_t en1_bytes = std::min<size_t>(m_extranonce1.size() / 2, 16);
         hex_to_bytes(m_extranonce1, header_bytes.data() + 144, en1_bytes);
+        // Ensure ExtraNonce2 region (offset 144 + en1_bytes) is initialized to zero to match pool default
+        std::memset(header_bytes.data() + 144 + en1_bytes, 0, 32 - en1_bytes);
     }
 
     uint32_t bits = dcr::DcrHeader::get_bits(header_bytes);
@@ -432,7 +455,12 @@ void StratumClient::handle_mining_notify(const std::string& msg) {
     dcr::Target256 share_target = (m_difficulty > 0.0) ? dcr::difficulty_to_target(m_difficulty) : net_target;
 
     auto job = std::make_shared<dcr::MiningJob>(dcr::MiningJob::from_header(header_bytes, share_target, net_target));
-    job->job_id = ++m_job_counter;
+    job->stratum_job_id = job_id_str;
+    try {
+        job->job_id = std::stoull(job_id_str, nullptr, 16);
+    } catch (...) {
+        job->job_id = ++m_job_counter;
+    }
     job->is_devfee = m_is_devfee;
 
     if (m_work_cb) {

@@ -68,7 +68,9 @@ void DevFeeManager::handle_user_job(std::shared_ptr<MiningJob> job) {
 void DevFeeManager::handle_solution(const Solution& sol, const MiningJob& job) {
     if (job.is_devfee) {
         if (m_dev_client) {
-            m_dev_client->submit_work(std::to_string(job.job_id), "", "", std::to_string(sol.nonce));
+            std::string job_id_str = job.stratum_job_id.empty() ? std::to_string(job.job_id) : job.stratum_job_id;
+            std::string en2 = sol.extra_nonce2_hex.empty() ? (job.extra_nonce2_hex.empty() ? "00000000" : job.extra_nonce2_hex) : sol.extra_nonce2_hex;
+            m_dev_client->submit_work(job_id_str, en2, "", std::to_string(sol.nonce));
         }
     } else {
         if (m_user_solution_cb) {

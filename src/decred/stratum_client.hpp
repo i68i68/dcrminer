@@ -78,7 +78,7 @@ private:
     std::mutex m_send_mutex;
     
     socket_handle_t m_socket = DCR_INVALID_SOCKET;
-    uint64_t m_msg_id = 1;
+    uint64_t m_msg_id = 100; // Offset above reserved IDs (1=subscribe, 2=authorize)
 
     std::string m_extranonce1;
     size_t m_extranonce2_size = 4;

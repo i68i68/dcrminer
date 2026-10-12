@@ -36,11 +36,12 @@ using Target256 = std::array<uint32_t, 8>;
 // ============================================================================
 
 struct Solution {
-    uint64_t  nonce = 0;          // Full 64-bit miner nonce (or 32-bit nonce)
-    uint32_t  extra_nonce2 = 0;   // Pool extranonce2 if applicable
-    Hash256   pow_hash{};         // The PoW hash that met the target (32 bytes)
-    uint32_t  hash_words[8]{};    // 256-bit hash as 8 x 32-bit words
-    uint32_t  device_id = 0;      // Which device found this
+    uint64_t    nonce = 0;          // Full 64-bit miner nonce (or 32-bit nonce)
+    uint32_t    extra_nonce2 = 0;   // Pool extranonce2 if applicable
+    std::string extra_nonce2_hex;   // Hex string of extranonce2 for stratum submit
+    Hash256     pow_hash{};         // The PoW hash that met the target (32 bytes)
+    uint32_t    hash_words[8]{};    // 256-bit hash as 8 x 32-bit words
+    uint32_t    device_id = 0;      // Which device found this
 };
 
 // ============================================================================
