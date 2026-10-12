@@ -58,10 +58,19 @@ __global__ void dcr_blake3_mine(uint32_t start_nonce, uint32_t count, SolutionKe
     if (thread_id >= count) return;
     uint32_t nonce = start_nonce + thread_id;
 
-    uint32_t m[16];
-    #pragma unroll
-    for (int i = 0; i < 16; ++i) m[i] = c_block2[i];
-    m[3] = nonce;
+    const uint32_t m0  = c_block2[0];
+    const uint32_t m1  = c_block2[1];
+    const uint32_t m2  = c_block2[2];
+    const uint32_t m3  = nonce;
+    const uint32_t m4  = c_block2[4];
+    const uint32_t m5  = c_block2[5];
+    const uint32_t m6  = c_block2[6];
+    const uint32_t m7  = c_block2[7];
+    const uint32_t m8  = c_block2[8];
+    const uint32_t m9  = c_block2[9];
+    const uint32_t m10 = c_block2[10];
+    const uint32_t m11 = c_block2[11];
+    const uint32_t m12 = c_block2[12];
 
     uint32_t v0 = c_midstate[0];
     uint32_t v1 = c_midstate[1];
@@ -81,76 +90,74 @@ __global__ void dcr_blake3_mine(uint32_t start_nonce, uint32_t count, SolutionKe
     uint32_t v15 = 0x0A;
 
     // R0
-    G(v0, v4, v8,  v12, m[0], m[1]);
-    G(v1, v5, v9,  v13, m[2], m[3]);
-    G(v2, v6, v10, v14, m[4], m[5]);
-    G(v3, v7, v11, v15, m[6], m[7]);
-    G(v0, v5, v10, v15, m[8], m[9]);
-    G(v1, v6, v11, v12, m[10], m[11]);
-    // m[13] is 0
-    G(v2, v7, v8,  v13, m[12], 0);
-    // m[14], m[15] are 0
-    G(v3, v4, v9,  v14, 0, 0);
+    G(v0, v4, v8,  v12, m0,  m1);
+    G(v1, v5, v9,  v13, m2,  m3);
+    G(v2, v6, v10, v14, m4,  m5);
+    G(v3, v7, v11, v15, m6,  m7);
+    G(v0, v5, v10, v15, m8,  m9);
+    G(v1, v6, v11, v12, m10, m11);
+    G(v2, v7, v8,  v13, m12, 0);
+    G(v3, v4, v9,  v14, 0,   0);
 
     // R1
-    G(v0, v4, v8,  v12, m[2], m[6]);
-    G(v1, v5, v9,  v13, m[3], m[10]);
-    G(v2, v6, v10, v14, m[7], m[0]);
-    G(v3, v7, v11, v15, m[4], 0);
-    G(v0, v5, v10, v15, m[1], m[11]);
-    G(v1, v6, v11, v12, m[12], m[5]);
-    G(v2, v7, v8,  v13, m[9], 0);
-    G(v3, v4, v9,  v14, 0, m[8]);
+    G(v0, v4, v8,  v12, m2,  m6);
+    G(v1, v5, v9,  v13, m3,  m10);
+    G(v2, v6, v10, v14, m7,  m0);
+    G(v3, v7, v11, v15, m4,  0);
+    G(v0, v5, v10, v15, m1,  m11);
+    G(v1, v6, v11, v12, m12, m5);
+    G(v2, v7, v8,  v13, m9,  0);
+    G(v3, v4, v9,  v14, 0,   m8);
     
     // R2
-    G(v0, v4, v8,  v12, m[3], m[4]);
-    G(v1, v5, v9,  v13, m[10], m[12]);
-    G(v2, v6, v10, v14, 0, m[2]);
-    G(v3, v7, v11, v15, m[7], 0);
-    G(v0, v5, v10, v15, m[6], m[5]);
-    G(v1, v6, v11, v12, m[9], m[0]);
-    G(v2, v7, v8,  v13, m[11], 0);
-    G(v3, v4, v9,  v14, m[8], m[1]);
+    G(v0, v4, v8,  v12, m3,  m4);
+    G(v1, v5, v9,  v13, m10, m12);
+    G(v2, v6, v10, v14, 0,   m2);
+    G(v3, v7, v11, v15, m7,  0);
+    G(v0, v5, v10, v15, m6,  m5);
+    G(v1, v6, v11, v12, m9,  m0);
+    G(v2, v7, v8,  v13, m11, 0);
+    G(v3, v4, v9,  v14, m8,  m1);
 
     // R3
-    G(v0, v4, v8,  v12, m[10], m[7]);
-    G(v1, v5, v9,  v13, m[12], m[9]);
-    G(v2, v6, v10, v14, 0, m[3]);
-    G(v3, v7, v11, v15, 0, 0);
-    G(v0, v5, v10, v15, m[4], m[0]);
-    G(v1, v6, v11, v12, m[11], m[2]);
-    G(v2, v7, v8,  v13, m[5], m[8]);
-    G(v3, v4, v9,  v14, m[1], m[6]);
+    G(v0, v4, v8,  v12, m10, m7);
+    G(v1, v5, v9,  v13, m12, m9);
+    G(v2, v6, v10, v14, 0,   m3);
+    G(v3, v7, v11, v15, 0,   0);
+    G(v0, v5, v10, v15, m4,  m0);
+    G(v1, v6, v11, v12, m11, m2);
+    G(v2, v7, v8,  v13, m5,  m8);
+    G(v3, v4, v9,  v14, m1,  m6);
 
     // R4
-    G(v0, v4, v8,  v12, m[12], 0);
-    G(v1, v5, v9,  v13, m[9], m[11]);
-    G(v2, v6, v10, v14, 0, m[10]);
-    G(v3, v7, v11, v15, 0, m[8]);
-    G(v0, v5, v10, v15, m[7], m[2]);
-    G(v1, v6, v11, v12, m[5], m[3]);
-    G(v2, v7, v8,  v13, m[0], m[1]);
-    G(v3, v4, v9,  v14, m[6], m[4]);
+    G(v0, v4, v8,  v12, m12, 0);
+    G(v1, v5, v9,  v13, m9,  m11);
+    G(v2, v6, v10, v14, 0,   m10);
+    G(v3, v7, v11, v15, 0,   m8);
+    G(v0, v5, v10, v15, m7,  m2);
+    G(v1, v6, v11, v12, m5,  m3);
+    G(v2, v7, v8,  v13, m0,  m1);
+    G(v3, v4, v9,  v14, m6,  m4);
 
     // R5
-    G(v0, v4, v8,  v12, m[9], 0);
-    G(v1, v5, v9,  v13, m[11], m[5]);
-    G(v2, v6, v10, v14, m[8], m[12]);
-    G(v3, v7, v11, v15, 0, m[1]);
-    G(v0, v5, v10, v15, 0, m[3]);
-    G(v1, v6, v11, v12, m[0], m[10]);
-    G(v2, v7, v8,  v13, m[2], m[6]);
-    G(v3, v4, v9,  v14, m[4], m[7]);
+    G(v0, v4, v8,  v12, m9,  0);
+    G(v1, v5, v9,  v13, m11, m5);
+    G(v2, v6, v10, v14, m8,  m12);
+    G(v3, v7, v11, v15, 0,   m1);
+    G(v0, v5, v10, v15, 0,   m3);
+    G(v1, v6, v11, v12, m0,  m10);
+    G(v2, v7, v8,  v13, m2,  m6);
+    G(v3, v4, v9,  v14, m4,  m7);
 
     // R6
-    G(v0, v4, v8,  v12, m[11], 0);
-    G(v1, v5, v9,  v13, m[5], m[0]);
-    G(v2, v6, v10, v14, m[1], m[9]);
-    G(v3, v7, v11, v15, m[8], m[6]);
-    G(v0, v5, v10, v15, 0, m[10]);
-    G(v1, v6, v11, v12, m[2], m[12]);
-    G(v2, v7, v8,  v13, m[3], m[4]);
-    G(v3, v4, v9,  v14, m[7], 0);
+    G(v0, v4, v8,  v12, m11, 0);
+    G(v1, v5, v9,  v13, m5,  m0);
+    G(v2, v6, v10, v14, m1,  m9);
+    G(v3, v7, v11, v15, m8,  m6);
+    G(v0, v5, v10, v15, 0,   m10);
+    G(v1, v6, v11, v12, m2,  m12);
+    G(v2, v7, v8,  v13, m3,  m4);
+    G(v3, v4, v9,  v14, m7,  0);
 
     uint32_t h[8];
     h[0] = v0 ^ v8;

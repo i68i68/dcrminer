@@ -357,7 +357,7 @@ void StratumClient::process_message(const std::string& msg) {
     }
 
     // Check for share submission result (id >= 3)
-    if (json_has_key(msg, "id") && !json_has_key_val(msg, "id", "1") && !json_has_key_val(msg, "id", "2")) {
+    if (json_has_key(msg, "id") && !json_has_key_val(msg, "id", "null") && !json_has_key_val(msg, "id", "1") && !json_has_key_val(msg, "id", "2")) {
         if (json_has_key_val(msg, "result", "true")) {
             if (m_is_devfee) {
                 dcr::term::log_success("✅ [DEVFEE]", "0.1% DevFee share accepted by pool! Thank you for supporting development! 🎉");
@@ -462,6 +462,9 @@ void StratumClient::handle_mining_notify(const std::string& msg) {
         job->job_id = ++m_job_counter;
     }
     job->is_devfee = m_is_devfee;
+    if (!m_extranonce1.empty()) {
+        job->extra_nonce1_size = std::min<size_t>(m_extranonce1.size() / 2, 16);
+    }
 
     if (m_work_cb) {
         m_work_cb(job);

@@ -160,6 +160,7 @@ int main(int argc, char** argv) {
             rpc_cert = argv[++i];
         } else if (arg == "--pool" && i + 1 < argc) {
             pool_url = argv[++i];
+            mode = "stratum";
         } else if (arg == "--user" && i + 1 < argc) {
             pool_user = argv[++i];
         } else if (arg == "--pass" && i + 1 < argc) {
@@ -259,10 +260,13 @@ int main(int argc, char** argv) {
             dcr::HeaderBytes solved_header = job.header_template;
             if (!sol.extra_nonce2_hex.empty()) {
                 uint32_t en2_val = sol.extra_nonce2;
-                solved_header[148] = static_cast<uint8_t>((en2_val >> 24) & 0xFF);
-                solved_header[149] = static_cast<uint8_t>((en2_val >> 16) & 0xFF);
-                solved_header[150] = static_cast<uint8_t>((en2_val >> 8) & 0xFF);
-                solved_header[151] = static_cast<uint8_t>(en2_val & 0xFF);
+                size_t en2_offset = 144 + job.extra_nonce1_size;
+                if (en2_offset + 4 <= 176) {
+                    solved_header[en2_offset + 0] = static_cast<uint8_t>((en2_val >> 24) & 0xFF);
+                    solved_header[en2_offset + 1] = static_cast<uint8_t>((en2_val >> 16) & 0xFF);
+                    solved_header[en2_offset + 2] = static_cast<uint8_t>((en2_val >> 8) & 0xFF);
+                    solved_header[en2_offset + 3] = static_cast<uint8_t>(en2_val & 0xFF);
+                }
             }
             dcr::DcrHeader::set_nonce(solved_header, static_cast<uint32_t>(sol.nonce));
             std::string hex = dcr::hex_encode(solved_header.data(), 180);

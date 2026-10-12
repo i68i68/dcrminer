@@ -21,6 +21,7 @@ struct MiningJob {
     double difficulty = 0.0;
     uint32_t extra_nonce2 = 0;
     std::string extra_nonce2_hex = "00000000";
+    size_t extra_nonce1_size = 4;
     HeaderBytes header_template; // Full 180-byte template
     std::atomic<bool> stale{false};
     bool is_devfee{false};
@@ -39,6 +40,7 @@ struct MiningJob {
         difficulty = other.difficulty;
         extra_nonce2 = other.extra_nonce2;
         extra_nonce2_hex = other.extra_nonce2_hex;
+        extra_nonce1_size = other.extra_nonce1_size;
         header_template = other.header_template;
         stale.store(other.stale.load());
         is_devfee = other.is_devfee;
@@ -56,6 +58,7 @@ struct MiningJob {
         difficulty = other.difficulty;
         extra_nonce2 = other.extra_nonce2;
         extra_nonce2_hex = other.extra_nonce2_hex;
+        extra_nonce1_size = other.extra_nonce1_size;
         header_template = other.header_template;
         stale.store(other.stale.load());
         is_devfee = other.is_devfee;

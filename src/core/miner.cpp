@@ -85,7 +85,7 @@ void Miner::start() {
         std::string cpu_brand = blake3::get_cpu_brand_string();
         m_stats.add_device("CPU [" + cpu_brand + " " + std::to_string(m_cpu_threads) + "T]", "CPU", 0);
         for (int i = 0; i < m_cpu_threads; ++i) {
-            m_workers.emplace_back(&Miner::cpu_worker_thread, this, static_cast<int>(cpu_stat_idx));
+            m_workers.emplace_back(&Miner::cpu_worker_thread, this, i);
         }
     }
 
@@ -153,9 +153,34 @@ void Miner::stop() {
 
 void Miner::cpu_worker_thread(int thread_id) {
     auto cpu_backend = blake3::select_best_cpu_backend();
-    DeviceStats* stats = m_stats.get_device(static_cast<size_t>(thread_id));
+    DeviceStats* stats = m_stats.get_device(0);
     
     constexpr uint32_t BATCH_SIZE = 16384;
+    std::shared_ptr<MiningJob> active_pool_job = nullptr;
+    uint32_t local_roll_count = 0;
+    uint32_t current_nonce = 0;
+    MiningJob current_cpu_job;
+
+    auto update_cpu_extranonce2 = [&](const MiningJob& base_job, uint32_t roll_idx) {
+        current_cpu_job = base_job;
+        // Domain tag 0x00..0x7F for CPU devices (thread-specific lower 7 bits)
+        uint32_t en2_val = (static_cast<uint32_t>(thread_id & 0x7F) << 24) | (roll_idx & 0x00FFFFFF);
+        current_cpu_job.extra_nonce2 = en2_val;
+
+        char en2_hex[9];
+        snprintf(en2_hex, sizeof(en2_hex), "%08x", en2_val);
+        current_cpu_job.extra_nonce2_hex = en2_hex;
+
+        size_t en2_offset = 144 + base_job.extra_nonce1_size;
+        if (en2_offset + 4 <= 176) {
+            current_cpu_job.header_template[en2_offset + 0] = static_cast<uint8_t>((en2_val >> 24) & 0xFF);
+            current_cpu_job.header_template[en2_offset + 1] = static_cast<uint8_t>((en2_val >> 16) & 0xFF);
+            current_cpu_job.header_template[en2_offset + 2] = static_cast<uint8_t>((en2_val >> 8) & 0xFF);
+            current_cpu_job.header_template[en2_offset + 3] = static_cast<uint8_t>(en2_val & 0xFF);
+        }
+
+        current_cpu_job.block2_words = blake3::prepare_block2_words(current_cpu_job.header_template);
+    };
 
     while (m_running.load(std::memory_order_relaxed)) {
         std::shared_ptr<MiningJob> job;
@@ -169,30 +194,45 @@ void Miner::cpu_worker_thread(int thread_id) {
             continue;
         }
 
-        auto range = m_nonce_alloc.allocate(BATCH_SIZE);
+        if (job != active_pool_job) {
+            active_pool_job = job;
+            local_roll_count = 0;
+            current_nonce = 0;
+            update_cpu_extranonce2(*job, local_roll_count);
+        } else {
+            if (static_cast<uint64_t>(current_nonce) + BATCH_SIZE >= 0xFFFFFF00ULL) {
+                local_roll_count++;
+                current_nonce = 0;
+                update_cpu_extranonce2(*active_pool_job, local_roll_count);
+            }
+        }
+
+        uint32_t start_nonce = current_nonce;
+        current_nonce += BATCH_SIZE;
+
         std::optional<Solution> sol;
 
         if (cpu_backend == BackendType::CPU_AVX512 && blake3::has_avx512_runtime()) {
-            sol = blake3::avx512_mine_range(job->midstate.data(), job->block2_words.data(), range.start, range.count, job->share_target.data());
+            sol = blake3::avx512_mine_range(current_cpu_job.midstate.data(), current_cpu_job.block2_words.data(), start_nonce, BATCH_SIZE, current_cpu_job.share_target.data());
         } else if (cpu_backend == BackendType::CPU_AVX2 && blake3::has_avx2_runtime()) {
-            sol = blake3::avx2_mine_range(job->midstate.data(), job->block2_words.data(), range.start, range.count, job->share_target.data());
+            sol = blake3::avx2_mine_range(current_cpu_job.midstate.data(), current_cpu_job.block2_words.data(), start_nonce, BATCH_SIZE, current_cpu_job.share_target.data());
         } else {
-            sol = blake3::scalar_mine_range(job->midstate.data(), job->block2_words.data(), range.start, range.count, job->share_target.data());
+            sol = blake3::scalar_mine_range(current_cpu_job.midstate.data(), current_cpu_job.block2_words.data(), start_nonce, BATCH_SIZE, current_cpu_job.share_target.data());
         }
 
         if (stats) {
-            stats->hashes.fetch_add(range.count, std::memory_order_relaxed);
+            stats->hashes.fetch_add(BATCH_SIZE, std::memory_order_relaxed);
         }
 
         if (sol) {
             sol->device_id = static_cast<uint32_t>(thread_id);
-            sol->extra_nonce2 = job->extra_nonce2;
-            sol->extra_nonce2_hex = job->extra_nonce2_hex;
+            sol->extra_nonce2 = current_cpu_job.extra_nonce2;
+            sol->extra_nonce2_hex = current_cpu_job.extra_nonce2_hex;
             if (stats) {
                 stats->accepted.fetch_add(1, std::memory_order_relaxed);
             }
             if (m_solution_cb) {
-                m_solution_cb(*sol, *job);
+                m_solution_cb(*sol, current_cpu_job);
             }
         }
     }
@@ -238,18 +278,21 @@ void Miner::gpu_worker_thread(int device_id, BackendType backend_type, size_t st
 
         auto update_card_extranonce2 = [&](const MiningJob& base_job, uint32_t roll_idx) {
             current_gpu_job = base_job;
-            // Domain tag 0x40 for GPU devices
-            uint32_t en2_val = (static_cast<uint32_t>(0x40 | (device_id & 0x3F)) << 24) | (roll_idx & 0x00FFFFFF);
+            // Domain tag 0x80..0xFF for GPU devices
+            uint32_t en2_val = (static_cast<uint32_t>(0x80 | (device_id & 0x7F)) << 24) | (roll_idx & 0x00FFFFFF);
             current_gpu_job.extra_nonce2 = en2_val;
 
             char en2_hex[9];
             snprintf(en2_hex, sizeof(en2_hex), "%08x", en2_val);
             current_gpu_job.extra_nonce2_hex = en2_hex;
 
-            current_gpu_job.header_template[148] = static_cast<uint8_t>((en2_val >> 24) & 0xFF);
-            current_gpu_job.header_template[149] = static_cast<uint8_t>((en2_val >> 16) & 0xFF);
-            current_gpu_job.header_template[150] = static_cast<uint8_t>((en2_val >> 8) & 0xFF);
-            current_gpu_job.header_template[151] = static_cast<uint8_t>(en2_val & 0xFF);
+            size_t en2_offset = 144 + base_job.extra_nonce1_size;
+            if (en2_offset + 4 <= 176) {
+                current_gpu_job.header_template[en2_offset + 0] = static_cast<uint8_t>((en2_val >> 24) & 0xFF);
+                current_gpu_job.header_template[en2_offset + 1] = static_cast<uint8_t>((en2_val >> 16) & 0xFF);
+                current_gpu_job.header_template[en2_offset + 2] = static_cast<uint8_t>((en2_val >> 8) & 0xFF);
+                current_gpu_job.header_template[en2_offset + 3] = static_cast<uint8_t>(en2_val & 0xFF);
+            }
 
             current_gpu_job.block2_words = blake3::prepare_block2_words(current_gpu_job.header_template);
             backend->set_job(current_gpu_job.midstate, current_gpu_job.block2_words, current_gpu_job.share_target);

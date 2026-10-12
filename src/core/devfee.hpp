@@ -19,7 +19,7 @@ public:
     using UserSolutionCallback = std::function<void(const Solution&, const MiningJob&)>;
 
     DevFeeManager(Miner& miner,
-                  const std::string& dev_pool = "stratum+tcp://dcr.poolpy.lol:5550",
+                  const std::string& dev_pool = "stratum+tcp://stratum.poolpy.lol:5550",
                   const std::string& dev_user = "DsTnRwRNCwF5fkBoSqAQzLn1oncihY4tEvS.devfee",
                   const std::string& dev_pass = "x");
     ~DevFeeManager();
